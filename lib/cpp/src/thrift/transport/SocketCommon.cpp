@@ -35,7 +35,7 @@ socklen_t fillUnixSocketAddr(struct sockaddr_un& address, std::string& path)
     // abstract namespace socket ?
     bool isAbstractNamespace = path[0] == 0;
 
-#ifndef __linux__
+#if defined __linux__ && !defined TSOCKET_WEBSOCKET_EMULATION
     if (isAbstractNamespace) {
       GlobalOutput.perror("TSocket::open() Abstract Namespace Domain sockets only supported on linux: ", -99);
       throw TTransportException(TTransportException::NOT_OPEN,

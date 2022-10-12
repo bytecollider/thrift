@@ -42,6 +42,10 @@
 #include <alloca.h>
 #endif
 
+#ifdef THRIFT_NO_SERVER
+#error "Trying to build a server with THRIFT_NO_SERVER defined."
+#endif
+
 using std::string;
 
 namespace apache {
@@ -292,7 +296,7 @@ private:
       if (read < length) {
         return false;
       }
-      
+
       // Unmask the data
       for (size_t i = 0; i < length; i++) {
         buffer[i] ^= headerBuffer[i % 4];

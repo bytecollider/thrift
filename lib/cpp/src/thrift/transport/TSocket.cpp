@@ -35,8 +35,7 @@
 #endif
 #ifdef HAVE_POLL_H
 #include <poll.h>
-#endif
-#ifdef HAVE_SYS_POLL_H
+#elif HAVE_SYS_POLL_H
 #include <sys/poll.h>
 #endif
 #include <sys/types.h>
@@ -147,7 +146,7 @@ TSocket::TSocket(THRIFT_SOCKET socket, std::shared_ptr<TConfiguration> config)
     noDelay_(1),
     maxRecvRetries_(5) {
   cachedPeerAddr_.ipv4.sin_family = AF_UNSPEC;
-#ifdef SO_NOSIGPIPE
+#if defined SO_NOSIGPIPE && !defined TSOCKET_WEBSOCKET_EMULATION
   {
     int one = 1;
     setsockopt(socket_, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
@@ -155,6 +154,7 @@ TSocket::TSocket(THRIFT_SOCKET socket, std::shared_ptr<TConfiguration> config)
 #endif
 }
 
+#if !defined TSOCKET_NO_INTERRUPT_LISTENER
 TSocket::TSocket(THRIFT_SOCKET socket, std::shared_ptr<THRIFT_SOCKET> interruptListener,
                 std::shared_ptr<TConfiguration> config)
   : TVirtualTransport(config),
@@ -171,13 +171,14 @@ TSocket::TSocket(THRIFT_SOCKET socket, std::shared_ptr<THRIFT_SOCKET> interruptL
     noDelay_(1),
     maxRecvRetries_(5) {
   cachedPeerAddr_.ipv4.sin_family = AF_UNSPEC;
-#ifdef SO_NOSIGPIPE
+#if defined SO_NOSIGPIPE && !defined TSOCKET_WEBSOCKET_EMULATION
   {
     int one = 1;
     setsockopt(socket_, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
   }
 #endif
 }
+#endif
 
 TSocket::~TSocket() {
   close();
@@ -211,6 +212,8 @@ bool TSocket::peek() {
   if (!isOpen()) {
     return false;
   }
+
+#if !defined TSOCKET_NO_INTERRUPT_LISTENER
   if (interruptListener_) {
     for (int retries = 0;;) {
       struct THRIFT_POLLFD fds[2];
@@ -241,6 +244,7 @@ bool TSocket::peek() {
       }
     }
   }
+#endif
 
   // Check to see if data is available or if the remote side closed
   uint8_t buf;
@@ -262,11 +266,44 @@ bool TSocket::peek() {
   return (r > 0);
 }
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 void TSocket::openConnection(struct addrinfo* res) {
 
   if (isOpen()) {
     return;
   }
+
+#ifdef TSOCKET_WEBSOCKET_EMULATION
+  // create the socket and set to non-blocking
+  socket_ = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+  if (socket_ == -1) {
+    int errno_copy = THRIFT_GET_SOCKET_ERROR;
+    GlobalOutput.perror("TSocket::open() socket() " + getSocketInfo(), errno_copy);
+    throw TTransportException(TTransportException::NOT_OPEN, "socket() failed", errno_copy);
+  }
+  fcntl(socket_, F_SETFL, O_NONBLOCK);
+
+  // connect the socket
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons(9090);
+  if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1) {
+    int errno_copy = THRIFT_GET_SOCKET_ERROR;
+    GlobalOutput.perror("TSocket::open() inet_pton() " + getSocketInfo(), errno_copy);
+    throw TTransportException(TTransportException::NOT_OPEN, "inet_pton() failed", errno_copy);
+  }
+
+  int ret = connect(socket_, (struct sockaddr *)&addr, sizeof(addr));
+  if (ret == -1 && errno != EINPROGRESS) {
+    int errno_copy = THRIFT_GET_SOCKET_ERROR;
+    GlobalOutput.perror("TSocket::open() connect() " + getSocketInfo(), errno_copy);
+    throw TTransportException(TTransportException::NOT_OPEN, "connect() failed", errno_copy);
+  }
+#else
 
   if (isUnixDomainSocket()) {
     socket_ = socket(PF_UNIX, SOCK_STREAM, IPPROTO_IP);
@@ -300,7 +337,7 @@ void TSocket::openConnection(struct addrinfo* res) {
   // No delay
   setNoDelay(noDelay_);
 
-#ifdef SO_NOSIGPIPE
+#if defined SO_NOSIGPIPE && !defined TSOCKET_WEBSOCKET_EMULATION
   {
     int one = 1;
     setsockopt(socket_, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
@@ -405,23 +442,28 @@ done:
     GlobalOutput.perror("TSocket::open() THRIFT_FCNTL " + getSocketInfo(), errno_copy);
     throw TTransportException(TTransportException::NOT_OPEN, "THRIFT_FCNTL() failed", errno_copy);
   }
-
   if (!isUnixDomainSocket()) {
     setCachedAddress(res->ai_addr, static_cast<socklen_t>(res->ai_addrlen));
   }
+#endif
 }
 
 void TSocket::open() {
   if (isOpen()) {
     return;
   }
+#if defined TSOCKET_WEBSOCKET_EMULATION
+  openConnection(nullptr);
+#else
   if (isUnixDomainSocket()) {
     unix_open();
   } else {
     local_open();
   }
+#endif
 }
 
+#if !defined TSOCKET_WEBSOCKET_EMULATION
 void TSocket::unix_open() {
   if (isUnixDomainSocket()) {
     // Unix Domain Socket does not need addrinfo struct, so we pass NULL
@@ -497,6 +539,7 @@ void TSocket::local_open() {
   // Free address structure memory
   freeaddrinfo(res0);
 }
+#endif
 
 void TSocket::close() {
   if (socket_ != THRIFT_INVALID_SOCKET) {
@@ -546,6 +589,7 @@ try_again:
 
   int got = 0;
 
+#if !defined TSOCKET_NO_INTERRUPT_LISTENER
   if (interruptListener_) {
     struct THRIFT_POLLFD fds[2];
     std::memset(fds, 0, sizeof(fds));
@@ -575,6 +619,7 @@ try_again:
 
     // falling through means there is something to recv and it cannot block
   }
+#endif
 
   got = static_cast<int>(recv(socket_, cast_sockopt(buf), len, 0));
   // THRIFT_GETTIMEOFDAY can change THRIFT_GET_SOCKET_ERROR
@@ -703,7 +748,7 @@ std::string TSocket::getPath() const {
 }
 
 bool TSocket::isUnixDomainSocket() const {
-    return !path_.empty();
+  return !path_.empty();
 }
 
 void TSocket::setHost(string host) {
@@ -725,6 +770,7 @@ void TSocket::setLinger(bool on, int linger) {
     return;
   }
 
+#if !defined TSOCKET_WEBSOCKET_EMULATION
 #ifndef _WIN32
   struct linger l = {(lingerOn_ ? 1 : 0), lingerVal_};
 #else
@@ -737,6 +783,7 @@ void TSocket::setLinger(bool on, int linger) {
         = THRIFT_GET_SOCKET_ERROR; // Copy THRIFT_GET_SOCKET_ERROR because we're allocating memory.
     GlobalOutput.perror("TSocket::setLinger() setsockopt() " + getSocketInfo(), errno_copy);
   }
+#endif
 }
 
 void TSocket::setNoDelay(bool noDelay) {
@@ -745,6 +792,7 @@ void TSocket::setNoDelay(bool noDelay) {
     return;
   }
 
+#if !defined TSOCKET_WEBSOCKET_EMULATION
   // Set socket to NODELAY
   int v = noDelay_ ? 1 : 0;
   int ret = setsockopt(socket_, IPPROTO_TCP, TCP_NODELAY, cast_sockopt(&v), sizeof(v));
@@ -753,6 +801,7 @@ void TSocket::setNoDelay(bool noDelay) {
         = THRIFT_GET_SOCKET_ERROR; // Copy THRIFT_GET_SOCKET_ERROR because we're allocating memory.
     GlobalOutput.perror("TSocket::setNoDelay() setsockopt() " + getSocketInfo(), errno_copy);
   }
+#endif
 }
 
 void TSocket::setConnTimeout(int ms) {
@@ -771,6 +820,8 @@ void setGenericTimeout(THRIFT_SOCKET s, int timeout_ms, int optname) {
     return;
   }
 
+#if !defined TSOCKET_WEBSOCKET_EMULATION
+
 #ifdef _WIN32
   DWORD platform_time = static_cast<DWORD>(timeout_ms);
 #else
@@ -783,6 +834,7 @@ void setGenericTimeout(THRIFT_SOCKET s, int timeout_ms, int optname) {
         = THRIFT_GET_SOCKET_ERROR; // Copy THRIFT_GET_SOCKET_ERROR because we're allocating memory.
     GlobalOutput.perror("TSocket::setGenericTimeout() setsockopt() ", errno_copy);
   }
+#endif
 }
 
 void TSocket::setRecvTimeout(int ms) {
@@ -802,6 +854,8 @@ void TSocket::setKeepAlive(bool keepAlive) {
     return;
   }
 
+#if !defined TSOCKET_WEBSOCKET_EMULATION
+
 #ifdef _WIN32
   if (isUnixDomainSocket()) {
       // Windows Domain sockets do not support SO_KEEPALIVE.
@@ -818,6 +872,7 @@ void TSocket::setKeepAlive(bool keepAlive) {
         = THRIFT_GET_SOCKET_ERROR; // Copy THRIFT_GET_SOCKET_ERROR because we're allocating memory.
     GlobalOutput.perror("TSocket::setKeepAlive() setsockopt() " + getSocketInfo(), errno_copy);
   }
+#endif
 }
 
 void TSocket::setMaxRecvRetries(int maxRecvRetries) {
@@ -826,6 +881,9 @@ void TSocket::setMaxRecvRetries(int maxRecvRetries) {
 
 string TSocket::getSocketInfo() const {
   std::ostringstream oss;
+#ifdef TSOCKET_WEBSOCKET_EMULATION
+  oss << "<TSOCKET_WEBSOCKET_EMULATION>";
+#else
   if (!isUnixDomainSocket()) {
     if (host_.empty() || port_ == 0) {
       oss << "<Host: " << getPeerAddress();
@@ -840,6 +898,7 @@ string TSocket::getSocketInfo() const {
       fmt_path_[0] = '@';
     oss << "<Path: " << fmt_path_ << ">";
   }
+#endif
   return oss.str();
 }
 

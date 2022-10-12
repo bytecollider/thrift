@@ -23,6 +23,10 @@
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransportException.h>
 
+#ifdef THRIFT_NO_SERVER
+#error "Trying to build a server with THRIFT_NO_SERVER defined."
+#endif
+
 namespace apache {
 namespace thrift {
 namespace transport {
@@ -65,8 +69,8 @@ public:
 
   /**
   * Utility method
-  * 
-  * @return server socket file descriptor 
+  *
+  * @return server socket file descriptor
   * @throw TTransportException If an error occurs
   */
 

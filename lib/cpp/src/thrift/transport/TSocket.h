@@ -24,7 +24,9 @@
 
 #include <thrift/transport/TTransport.h>
 #include <thrift/transport/TVirtualTransport.h>
+#if !defined THRIFT_NO_SERVER
 #include <thrift/transport/TServerSocket.h>
+#endif
 #include <thrift/transport/PlatformSocket.h>
 
 #ifdef HAVE_ARPA_INET_H
@@ -289,12 +291,14 @@ public:
    */
   TSocket(THRIFT_SOCKET socket, std::shared_ptr<TConfiguration> config = nullptr);
 
+#if !defined TSOCKET_NO_INTERRUPT_LISTENER
   /**
    * Constructor to create socket from file descriptor that
    * can be interrupted safely.
    */
   TSocket(THRIFT_SOCKET socket, std::shared_ptr<THRIFT_SOCKET> interruptListener,
          std::shared_ptr<TConfiguration> config = nullptr);
+#endif
 
   /**
    * Set a cache of the peer address (used when trivially available: e.g.
@@ -327,11 +331,13 @@ protected:
   /** Peer port */
   mutable int peerPort_;
 
+#if !defined TSOCKET_NO_INTERRUPT_LISTENER
   /**
    * A shared socket pointer that will interrupt a blocking read if data
    * becomes available on it
    */
   std::shared_ptr<THRIFT_SOCKET> interruptListener_;
+#endif
 
   /** Connect timeout in ms */
   int connTimeout_;
@@ -366,9 +372,11 @@ protected:
   /** Whether to use low minimum TCP retransmission timeout */
   static bool useLowMinRto_;
 
+#if !defined TSOCKET_WEBSOCKET_EMULATION
 private:
   void unix_open();
   void local_open();
+#endif
 };
 }
 }

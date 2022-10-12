@@ -23,6 +23,10 @@
 #include <thrift/transport/TNonblockingServerTransport.h>
 #include <thrift/transport/PlatformSocket.h>
 
+#ifdef THRIFT_NO_SERVER
+#error "Trying to build a server with THRIFT_NO_SERVER defined."
+#endif
+
 namespace apache {
 namespace thrift {
 namespace transport {

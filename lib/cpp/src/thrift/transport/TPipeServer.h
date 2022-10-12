@@ -26,6 +26,10 @@
 #include <thrift/transport/TServerSocket.h>
 #endif
 
+#ifdef THRIFT_NO_SERVER
+#error "Trying to build a server with THRIFT_NO_SERVER defined."
+#endif
+
 #define TPIPE_SERVER_MAX_CONNS_DEFAULT PIPE_UNLIMITED_INSTANCES
 
 // Windows - set security to allow non-elevated apps
