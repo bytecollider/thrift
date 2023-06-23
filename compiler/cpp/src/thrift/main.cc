@@ -39,10 +39,6 @@
 #include <errno.h>
 #include <limits.h>
 
-#ifdef _WIN32
-#include <windows.h> /* for GetFullPathName */
-#endif
-
 // Careful: must include globals first for extern definitions
 #include "thrift/common.h"
 #include "thrift/globals.h"

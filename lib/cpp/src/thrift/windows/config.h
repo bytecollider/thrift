@@ -87,4 +87,12 @@ typedef struct sockaddr_un {
 } SOCKADDR_UN, *PSOCKADDR_UN;
 #endif // HAVE_AF_UNIX_H
 
+
+// for compiler/cpp/src/thrift/thriftl.cc
+#include <io.h>
+#define isatty _isatty
+
+// for compiler/cpp/src/thrift/thrifty.cc
+#define PRIi64 "ld"
+
 #endif // _THRIFT_WINDOWS_CONFIG_H_
