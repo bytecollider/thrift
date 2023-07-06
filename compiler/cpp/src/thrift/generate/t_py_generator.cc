@@ -33,6 +33,11 @@
 #include "thrift/version.h"
 #include "thrift/generate/t_generator.h"
 
+#ifdef _WIN32
+// Windows SDK defines this somewhere...
+#undef interface
+#endif
+
 using std::map;
 using std::ostream;
 using std::ostringstream;
