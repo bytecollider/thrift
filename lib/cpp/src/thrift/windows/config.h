@@ -30,10 +30,53 @@
 
 // Something that defines PRId64 is required to build
 #define HAVE_INTTYPES_H 1
+#define HAVE_AF_UNIX_H 1
 
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0601
 #endif
+
+// Include windows.h here so that we can undef as many macros as possible
+#define NOMINMAX
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+
+// Undefs copied from niLang/src/API/niLang/Platforms/Win32/Win32_Redef.h
+#undef CreateFile
+#undef CreateFont
+#undef CreateMutex
+#undef CreateProcess
+#undef CreateSemaphore
+#undef CreateThread
+#undef CreateWindow
+#undef CreateWindowEx
+#undef DispatchMessage
+#undef DrawText
+#undef DrawTextEx
+#undef GetCharWidth
+#undef GetClassName
+#undef GetCommandLine
+#undef GetCurrentTime
+#undef GetFileAttributes
+#undef GetMessage
+#undef GetModuleFileName
+#undef GetObject
+#undef GetUserName
+#undef LoadBitmap
+#undef max
+#undef Message
+#undef MessageBox
+#undef min
+#undef PeekMessage
+#undef PostMessage
+#undef SendMessage
+#undef SetFileAttributes
+#undef SetPort
+#undef interface
 
 #if defined(_M_IX86) || defined(_M_X64)
 #define ARITHMETIC_RIGHT_SHIFT 1
@@ -55,10 +98,6 @@
 #include <thrift/windows/TWinsockSingleton.h>
 #include <thrift/windows/WinFcntl.h>
 #include <thrift/windows/SocketPair.h>
-
-// windows
-#include <winsock2.h>
-#include <ws2tcpip.h>
 
 #ifndef __MINGW32__
   #ifdef _WIN32_WCE
@@ -87,12 +126,12 @@ typedef struct sockaddr_un {
 } SOCKADDR_UN, *PSOCKADDR_UN;
 #endif // HAVE_AF_UNIX_H
 
-
 // for compiler/cpp/src/thrift/thriftl.cc
 #include <io.h>
 #define isatty _isatty
 
 // for compiler/cpp/src/thrift/thrifty.cc
-#define PRIi64 "ld"
+// #define PRIi64 etc...
+#include <inttypes.h>
 
 #endif // _THRIFT_WINDOWS_CONFIG_H_

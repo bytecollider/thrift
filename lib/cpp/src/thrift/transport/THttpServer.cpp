@@ -24,9 +24,6 @@
 #include <thrift/config.h>
 #include <thrift/transport/THttpServer.h>
 #include <thrift/transport/TSocket.h>
-#if defined(_MSC_VER) || defined(__MINGW32__)
-  #include <Shlwapi.h>
-#endif
 
 using std::string;
 
@@ -34,7 +31,7 @@ namespace apache {
 namespace thrift {
 namespace transport {
 
-THttpServer::THttpServer(std::shared_ptr<TTransport> transport, std::shared_ptr<TConfiguration> config) 
+THttpServer::THttpServer(std::shared_ptr<TTransport> transport, std::shared_ptr<TConfiguration> config)
   : THttpTransport(transport, config) {
 
 }
@@ -44,7 +41,16 @@ THttpServer::~THttpServer() = default;
 #if defined(_MSC_VER) || defined(__MINGW32__)
   #define THRIFT_GMTIME(TM, TIME)             gmtime_s(&TM, &TIME)
   #define THRIFT_strncasecmp(str1, str2, len) _strnicmp(str1, str2, len)
-  #define THRIFT_strcasestr(haystack, needle) StrStrIA(haystack, needle)
+static char* THRIFT_strcasestr(const char* haystack, const char* needle) {
+  size_t needleLen = strlen(needle);
+  while (*haystack) {
+    if (THRIFT_strncasecmp(haystack, needle, needleLen) == 0) {
+      return (char*)haystack;
+    }
+    haystack++;
+  }
+  return NULL;
+}
 #else
   #define THRIFT_GMTIME(TM, TIME)             gmtime_r(&TIME, &TM)
   #define THRIFT_strncasecmp(str1, str2, len) strncasecmp(str1, str2, len)
